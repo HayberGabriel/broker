@@ -1,53 +1,39 @@
-import threading
-import tkinter as tk
 from tkinter import ttk, simpledialog
 from tkinter.simpledialog import askstring
 from tkinter.simpledialog import Dialog
-import socket
-import pickle
+import socket, time, pickle, threading, tkinter as tk
+import tkinter.messagebox as messagebox
 
 class SocketServer:
     def __init__(self, broker):
         self.broker = broker
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.bind(('localhost', 12345))  # Escolha uma porta disponível
+        self.server_socket.bind(('localhost', 12345))
         self.server_socket.listen(5)
+        self.clients = []
+        self.clients_lock = threading.Lock()
 
         print("Aguardando conexões...")
         threading.Thread(target=self.accept_connections).start()
+
 
     def accept_connections(self):
         while True:
             client_socket, addr = self.server_socket.accept()
             print(f"Conexão aceita de {addr}")
 
-            # Inicia uma nova thread para lidar com o cliente
+            with self.clients_lock:
+                self.clients.append((client_socket, addr))
+
             threading.Thread(target=self.handle_client, args=(client_socket,)).start()
-
-    def handle_client(self, client_socket):
-        try:
-            while True:
-                data = client_socket.recv(1024)
-                if not data:
-                    break
-
-                # Decodifica os dados recebidos
-                message = pickle.loads(data)
-
-                # Processa a mensagem recebida (implemente conforme necessário)
-                self.process_message(message)
-
-        finally:
-            client_socket.close()
-
-    def process_message(self, message):
-        # Lógica para processar a mensagem recebida (implemente conforme necessário)
-        print(f"Mensagem recebida: {message}")
 
 class Broker:
     def __init__(self):
         self.topics = {"Tópico Inicial": ["Mensagem teste", "Segunda mensagem"]}
-        self.clients = []
+        self.clients = {"ExemploCliente": Client("ExemploCliente", self)}  # Exemplo de cliente adicionado ao iniciar
+
+    def get_topic_messages(self, topic):
+        return self.topics.get(topic, [])
 
     def add_topic(self, topic_name):
         self.topics[topic_name] = []
@@ -58,7 +44,13 @@ class Broker:
         return list(self.topics.keys())
 
     def add_client(self, client):
-        self.clients.append(client)
+        self.clients[client.name] = client
+
+    def remove_client(self, client):
+        self.clients.remove(client)
+
+    def get_clients(self):
+        return self.clients
 
     def list_topic_messages(self, topic_name):
         if topic_name in self.topics:
@@ -69,12 +61,29 @@ class Broker:
     def add_message_to_topic(self, topic_name, message):
         self.topics[topic_name].append(message)
 
+    def get_direct_messages(self, client_name):
+        if client_name in self.clients:
+            return self.clients[client_name].direct_messages
+        else:
+            return []
+        
+    def get_direct_messages_for_client(self, client_name):
+        if client_name in self.clients:
+            return self.clients[client_name].direct_messages
+        else:
+            return {}
+        
+    def subscribe_to_topic(self, client, topic_name):
+        if topic_name in self.topics:
+            self.topics[topic_name].add(client)
+
 class Client:
-    def __init__(self, name):
+    def __init__(self, name, broker):
         self.name = name
-        self.subscriptions = ["Tópico Inicial"]
+        self.subscriptions = ["topic"]
         self.messages_from_topic = {"topic": ["message1", "message2"]}
-        self.queue = {"from":["message1", "message2"]}
+        self.direct_messages = {"from1": ["tchau"], "from2" : ["oi", "oi"]}
+        self.broker = broker
 
     def subscribe_to_topic(self, topic_name):
         self.subscriptions.append(topic_name)
@@ -83,29 +92,33 @@ class Client:
         self.subscriptions.remove(topic_name)
 
     def add_in_messages_from_topic(self, topic_name, message):
-        if topic_name not in self.messages_from_topic:
-            self.messages_from_topic[topic_name] = []
-        self.messages_from_topic[topic_name].append(message)
+        if topic_name in self.subscriptions:
+            if topic_name not in self.messages_from_topic:
+                self.messages_from_topic[topic_name] = []
+            self.messages_from_topic[topic_name].append(message)
 
-    def receive_direct_message(self, sender_name, message):
-        print(f"Direct message received from '{sender_name}': {message}")
+    def send_direct_message(self, recipient, message):
+        if recipient in self.direct_messages:
+            self.direct_messages[recipient].append(message)
+        else:
+            self.direct_messages[recipient] = [message]
 
-class RemoveQueueDialog(simpledialog.Dialog):
-    def __init__(self, parent, queues):
-        self.queues = queues
-        super().__init__(parent, title="Remover Fila")
+class ListDirectMessagesDialog(simpledialog.Dialog):
+    def __init__(self, parent, senders):
+        self.senders = senders
+        super().__init__(parent, title="Selecionar Mensagens Diretas")
 
-    def body(self, master):
-        tk.Label(master, text="Selecione a fila a ser removida:").pack()
-
-        self.queue_name = tk.StringVar()
-        self.queue_name.set(self.queues[0])
-
-        self.queue_selection = ttk.Combobox(master, textvariable=self.queue_name, values=self.queues)
-        self.queue_selection.pack()
+    def body(self, frame):
+        ttk.Label(frame, text="Selecione o remetente:").pack(pady=10)
+        self.sender_var = tk.StringVar()
+        self.sender_var.set(self.senders[0] if self.senders else "")
+        sender_menu = ttk.Combobox(frame, textvariable=self.sender_var, values=self.senders)
+        sender_menu.pack(pady=10)
+        return sender_menu
 
     def apply(self):
-        self.result = self.queue_name.get()
+        selected_sender = self.sender_var.get()
+        self.result = ("Remover", selected_sender)
 
 class RemoveTopicDialog(simpledialog.Dialog):
     def __init__(self, parent, topics):
@@ -157,24 +170,7 @@ class SendTopicMessageDialog(simpledialog.Dialog):
 
     def apply(self):
         self.result = self.topic_name.get()
-
-class ListQueueMessagesDialog(simpledialog.Dialog):
-    def __init__(self, parent, queues):
-        self.queues = queues
-        super().__init__(parent, title="Listar Mensagens da Fila")
-
-    def body(self, master):
-        tk.Label(master, text="Selecione a fila para listar mensagens:").pack()
-
-        self.queue_name = tk.StringVar()
-        self.queue_name.set(self.queues[0])
-
-        self.queue_selection = ttk.Combobox(master, textvariable=self.queue_name, values=self.queues)
-        self.queue_selection.pack()
-
-    def apply(self):
-        self.result = self.queue_name.get()
-      
+   
 class SelectTopicDialog(simpledialog.Dialog):
     def __init__(self, parent, broker):
         self.broker = broker
@@ -193,29 +189,49 @@ class SelectTopicDialog(simpledialog.Dialog):
     def apply(self):
         self.result = self.topic_name.get()
 
-class SelectRecipientDialog:
-    def __init__(self, parent, clients):
-        self.dialog = tk.Toplevel(parent)
-        self.dialog.title("Selecionar Destinatário")
+class SelectDirectMessageDialog(simpledialog.Dialog):
+    def __init__(self, parent, client, direct_messages):
+        self.client = client
+        self.direct_messages = direct_messages
+        super().__init__(parent, title=f"Selecionar Mensagem Direta para {self.client}")
 
-        self.label = tk.Label(self.dialog, text="Selecione o destinatário:")
-        self.label.pack(padx=10, pady=10)
+    def body(self, master):
+        tk.Label(master, text="Selecione a mensagem direta:").pack()
+
+        self.direct_message_var = tk.StringVar()
+        self.direct_message_listbox = tk.Listbox(master, listvariable=self.direct_message_var, selectmode=tk.SINGLE)
+        self.direct_message_listbox.pack()
+
+        # Obter as mensagens diretas do cliente específico
+        client_direct_messages = self.direct_messages.get(self.client, {}).keys()
+
+        for direct_message in client_direct_messages:
+            self.direct_message_listbox.insert(tk.END, direct_message)
+
+    def apply(self):
+        selected_direct_message = self.direct_message_listbox.get(tk.ACTIVE)
+        self.result = selected_direct_message
+
+class SelectRecipientDialog(simpledialog.Dialog):
+    def __init__(self, parent, clients):
+        self.clients = clients
+        super().__init__(parent, title="Selecionar Destinatário")
+
+    def body(self, master):
+        tk.Label(master, text="Selecione o destinatário:").pack()
 
         self.recipient_var = tk.StringVar()
-        self.recipient_var.set(clients[0])  # Defina o primeiro cliente como padrão
-        self.recipient_menu = ttk.Combobox(self.dialog, textvariable=self.recipient_var, values=clients)
-        self.recipient_menu.pack(padx=10, pady=10)
+        self.recipient_var.set(self.clients[0])  # Defina o primeiro cliente como padrão
+        self.recipient_menu = ttk.Combobox(master, textvariable=self.recipient_var, values=self.clients)
+        self.recipient_menu.pack()
 
-        self.select_button = tk.Button(self.dialog, text="Selecionar", command=self.select)
-        self.select_button.pack(padx=10, pady=10)
-
-    def select(self):
+    def apply(self):
         self.result = self.recipient_var.get()
-        self.dialog.destroy()
 
 class SendDirectMessageDialog(Dialog):
-    def __init__(self, parent, recipients):
+    def __init__(self, parent, recipients, client):
         self.recipients = recipients
+        self.client = client
         super().__init__(parent)
 
     def body(self, master):
@@ -245,16 +261,40 @@ class SendDirectMessageDialog(Dialog):
         recipient = self.recipient_listbox.get(tk.ACTIVE)
         message = self.message_entry.get()
         if recipient and message:
+            self.client.send_direct_message(recipient, message)
             self.result = (recipient, message)
             self.cancel()
+
+class ShowMessagesCountDialog(simpledialog.Dialog):
+    def __init__(self, parent, client, direct_messages):
+        self.client = client
+        self.direct_messages = direct_messages
+        super().__init__(parent, title=f"Quantidade de Mensagens para {self.client}")
+
+    def body(self, master):
+        # Obter a lista de mensagens diretas do cliente específico
+        client_direct_messages = self.direct_messages.get(self.client, {}).keys()
+
+        tk.Label(master, text=f"Selecione a mensagem direta para {self.client}:").pack()
+
+        self.direct_message_var = tk.StringVar()
+        self.direct_message_listbox = tk.Listbox(master, listvariable=self.direct_message_var, selectmode=tk.SINGLE)
+        self.direct_message_listbox.pack()
+
+        for direct_message in client_direct_messages:
+            self.direct_message_listbox.insert(tk.END, direct_message)
+
+    def apply(self):
+        selected_direct_message = self.direct_message_listbox.get(tk.ACTIVE)
+        # Obter a lista real de mensagens diretas
+        messages = self.direct_messages.get(self.client, {}).get(selected_direct_message, [])
+        messagebox.showinfo("Quantidade de Mensagens", f"Quantidade de mensagens para {self.client} - {selected_direct_message}: {len(messages)}")
 
 class AdminApp:
     def __init__(self, root, broker):
         self.root = root
         self.root.title("Interface do Admin")
         self.broker = broker
-
-        self.queue_count = 1
 
         self.topic_name = tk.StringVar()
         self.topic_name.set("topic1")
@@ -278,18 +318,23 @@ class AdminApp:
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill="both", expand=True)
 
-        self.queue_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.queue_frame, text="Filas")
+        # Aba para mensagens diretas
+        self.direct_messages_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.direct_messages_frame, text="Mensagens Diretas")
 
-        self.create_queue_button = tk.Button(self.queue_frame, text="Adicionar Fila", command=self.add_queue, padx=20)
-        self.create_queue_button.pack()
+        self.show_direct_messages_button = tk.Button(self.direct_messages_frame, text="Visualizar Mensagens Diretas",
+                                                     command=self.show_direct_messages, padx=20)
+        self.show_direct_messages_button.pack()
 
-        self.remove_queue_button = tk.Button(self.queue_frame, text="Remover Fila", command=self.remove_queue, padx=20)
-        self.remove_queue_button.pack()
+        self.remove_direct_message_button = tk.Button(self.direct_messages_frame, text="Remover Mensagem Direta",
+                                                      command=self.remove_direct_message, padx=20)
+        self.remove_direct_message_button.pack()
 
-        self.list_queue_messages_button = tk.Button(self.queue_frame, text="Listar Quantidade de Mensagens na Fila", command=self.list_queue_messages, padx=20)
-        self.list_queue_messages_button.pack()
+        self.show_messages_count_button = tk.Button(self.direct_messages_frame, text="Mostrar Quantidade de Mensagens",
+                                                    command=self.show_messages_count, padx=20)
+        self.show_messages_count_button.pack()
 
+        # Aba para tópicos
         self.topic_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.topic_frame, text="Tópicos")
 
@@ -302,36 +347,6 @@ class AdminApp:
         self.list_topic_messages_button = tk.Button(self.topic_frame, text="Listar Mensagens do Tópico",
                                                     command=self.list_topic_messages, padx=20)
         self.list_topic_messages_button.pack()
-
-    def add_queue(self):
-        queue_name = f"fila{self.queue_count}"
-        self.broker.add_queue(queue_name)
-        self.message_text.insert(tk.END, f"Fila '{queue_name}' adicionada.\n")
-        self.queue_count += 1
-
-    def remove_queue(self):
-        queues = list(self.broker.queues.keys())
-        if not queues:
-            self.message_text.insert(tk.END, "Não há filas para remover.\n")
-            return
-
-        dialog = RemoveQueueDialog(self.root, queues)
-        if dialog.result:
-            queue_name = dialog.result
-            self.broker.remove_queue(queue_name)
-            self.message_text.insert(tk.END, f"Fila '{queue_name}' removida.\n")
-
-    def list_queue_messages(self):
-      queues = list(self.broker.queues.keys())
-      if not queues:
-          self.message_text.insert(tk.END, "Não há filas para listar mensagens.\n")
-          return
-
-      dialog = ListQueueMessagesDialog(self.root, queues)
-      if dialog.result:
-          queue_name = dialog.result
-          message_count = self.broker.list_messages_count(queue_name)
-          self.message_text.insert(tk.END, f"A fila '{queue_name}' contém {message_count} mensagens.\n")
 
     def add_topic(self):
         topic_name = askstring("Adicionar Tópico", "Nome do Tópico:")
@@ -370,6 +385,118 @@ class AdminApp:
                 for message in messages:
                     self.message_text.insert(tk.END, f"{message}\n")  # Ajuste aqui
 
+    def show_messages_count(self):
+        client_name = askstring("Selecionar Cliente", "Digite o nome do cliente:")
+        if client_name:
+            messages = self.broker.get_direct_messages(client_name)
+            message_count = len(messages)
+            messagebox.showinfo("Quantidade de Mensagens", f"O cliente {client_name} tem {message_count} mensagens diretas.")
+
+    def show_direct_messages(self):
+        # Adicione a lógica para exibir mensagens diretas aqui
+        clients = list(self.broker.clients.keys())
+
+        if not clients:
+            self.message_text.insert(tk.END, "Não há clientes para exibir mensagens diretas.\n")
+            return
+
+        # Selecionar cliente
+        dialog = SelectRecipientDialog(self.root, clients)
+        recipient = dialog.result
+
+        if recipient:
+            # Obter as mensagens diretas do cliente
+            direct_messages = self.broker.get_direct_messages_for_client(recipient)
+
+            if direct_messages:
+                senders = list(direct_messages.keys())
+                
+                # Criar uma janela personalizada para exibir as mensagens diretas
+                show_messages_dialog = tk.Toplevel(self.root)
+                show_messages_dialog.title(f"Mensagens Diretas de {recipient}")
+
+                tk.Label(show_messages_dialog, text=f"Mensagens diretas para {recipient}:").pack(pady=10)
+
+                for sender, messages in direct_messages.items():
+                    tk.Label(show_messages_dialog, text=f"Remetente: {sender}").pack()
+                    for message in messages:
+                        tk.Label(show_messages_dialog, text=f"- {message}").pack()
+                    tk.Label(show_messages_dialog, text="").pack()
+
+            else:
+                self.message_text.insert(tk.END, f"Não há mensagens diretas para '{recipient}'.\n") 
+    
+    def remove_direct_message(self):
+        clients = list(self.broker.clients.keys())
+
+        if not clients:
+            self.message_text.insert(tk.END, "Não há clientes para remover mensagens diretas.\n")
+            return
+
+        # Selecionar cliente
+        dialog = SelectRecipientDialog(self.root, clients)
+        recipient = dialog.result
+
+        if recipient:
+            # Obter as mensagens diretas do cliente
+            direct_messages = self.broker.get_direct_messages_for_client(recipient)
+
+            if direct_messages:
+                senders = list(direct_messages.keys())
+                
+                # Criar uma janela personalizada para exibir as mensagens diretas e permitir a seleção
+                select_message_dialog = tk.Toplevel(self.root)
+                select_message_dialog.title("Selecionar Mensagem Direta para Remover")
+
+                tk.Label(select_message_dialog, text="Selecione o remetente:").pack(pady=10)
+
+                sender_var = tk.StringVar()
+                sender_var.set(senders[0] if senders else "")
+                sender_menu = ttk.Combobox(select_message_dialog, textvariable=sender_var, values=senders)
+                sender_menu.pack(pady=10)
+
+                def remove_message():
+                    selected_sender = sender_var.get()
+                    messages = direct_messages[selected_sender]
+
+                    if messages:
+                        selected_message = message_listbox.get(tk.ACTIVE)
+                        
+                        if selected_message:
+                            messages.remove(selected_message)
+                            self.message_text.insert(tk.END,
+                                                    f"Mensagem direta removida de '{selected_sender}': {selected_message}\n")
+                            select_message_dialog.destroy()
+                        else:
+                            self.message_text.insert(tk.END,
+                                                    "Operação de remoção de mensagem direta cancelada.\n")
+                    else:
+                        self.message_text.insert(tk.END,
+                                                f"Não há mensagens diretas de '{selected_sender}' para remover.\n")
+
+                remove_button = tk.Button(select_message_dialog, text="Remover", command=remove_message)
+                remove_button.pack()
+
+                tk.Label(select_message_dialog, text="Selecione a mensagem:").pack(pady=10)
+
+                message_var = tk.StringVar()
+                message_listbox = tk.Listbox(select_message_dialog, listvariable=message_var, selectmode=tk.SINGLE)
+                message_listbox.pack()
+
+                sender_menu.bind("<<ComboboxSelected>>", lambda event: self.update_message_listbox(message_listbox, direct_messages, sender_var.get()))
+
+                select_message_dialog.protocol("WM_DELETE_WINDOW", lambda: self.message_text.insert(tk.END,
+                                                                                                    "Operação de remoção de mensagem direta cancelada.\n"))
+            else:
+                self.message_text.insert(tk.END, f"Não há mensagens diretas para '{recipient}'.\n")
+
+    def update_message_listbox(self, message_listbox, direct_messages, selected_sender):
+        messages = direct_messages.get(selected_sender, [])
+        message_listbox.delete(0, tk.END)  # Limpa a lista atual
+
+        for message in messages:
+            message_listbox.insert(tk.END, message)
+        
 if __name__ == "__main__":
     broker = Broker()
     server = SocketServer(broker)

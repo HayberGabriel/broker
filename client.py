@@ -1,51 +1,25 @@
-import tkinter as tk
 from tkinter import ttk
 from tkinter.simpledialog import askstring
 from server import *
-import socket
-import threading
-import pickle
+import socket, time, pickle, threading, tkinter as tk
 
 class SocketClient:
     def __init__(self, client):
-        self.client = client
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # Conecta ao servidor (certifique-se de que o servidor está em execução)
         self.client_socket.connect(('localhost', 12345))
+        client.socket = self.client_socket
 
-        # Inicia uma nova thread para lidar com a comunicação do servidor
         threading.Thread(target=self.receive_messages).start()
 
-    def send_message(self, message):
-        # Envia a mensagem serializada para o servidor
-        data = pickle.dumps(message)
-        self.client_socket.send(data)
-
     def receive_messages(self):
-        try:
-            while True:
-                data = self.client_socket.recv(1024)
-                if not data:
-                    break
-
-                # Decodifica os dados recebidos
-                message = pickle.loads(data)
-
-                # Processa a mensagem recebida (implemente conforme necessário)
-                self.process_message(message)
-
-        finally:
-            self.client_socket.close()
-
-    def process_message(self, message):
-        # Lógica para processar a mensagem recebida (implemente conforme necessário)
-        print(f"Mensagem recebida pelo cliente: {message}")
+        while True:
+            # Adicione a lógica para receber mensagens do servidor aqui
+            pass
 
 class ClientApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Interface do Cliente")
+        self.root.title(f"Bem vindo {client.name}!")
 
         # Frame principal
         self.main_frame = ttk.Frame(root)
@@ -75,6 +49,44 @@ class ClientApp:
         # Botão para cancelar a assinatura de um tópico
         self.unsubscribe_topic_button = tk.Button(self.main_frame, text="Cancelar Assinatura", command=self.unsubscribe_topic, padx=20)
         self.unsubscribe_topic_button.pack()
+
+        self.show_topic_messages_button = tk.Button(self.main_frame, text="Mostrar Mensagens dos Tópicos", command=self.show_topic_messages, padx=20)
+        self.show_topic_messages_button.pack()
+
+        # Botão para exibir mensagens diretas
+        self.show_direct_messages_button = tk.Button(self.main_frame, text="Mostrar Mensagens Diretas", command=self.show_direct_messages, padx=20)
+        self.show_direct_messages_button.pack()
+
+
+    def show_topic_messages(self):
+        if client:
+            topics = list(client.subscriptions)
+
+            if not topics:
+                self.message_text.insert(tk.END, "Você não assinou nenhum tópico.\n")
+                return
+
+            dialog = ListTopicMessagesDialog(self.root, topics)
+            selected_topic = dialog.result  # Obter o tópico selecionado
+
+            if selected_topic:
+                self.message_text.insert(tk.END, f"Mostrando mensagens do tópico '{selected_topic}':\n")
+                for message in broker.get_topic_messages(selected_topic):
+                    self.message_text.insert(tk.END, f"- {message}\n")
+                self.message_text.insert(tk.END, "\n")
+
+    def show_direct_messages(self):
+        if client:
+            self.message_text.insert(tk.END, "Suas mensagens diretas:\n")
+
+            for sender, messages in client.direct_messages.items():
+                self.message_text.insert(tk.END, f"Remetente: {sender}\n")
+                for message in messages:
+                    self.message_text.insert(tk.END, f"- {message}\n")
+                self.message_text.insert(tk.END, "\n")
+
+            if not client.direct_messages:
+                self.message_text.insert(tk.END, "Você não tem mensagens diretas.\n")
 
     def subscribe_topic(self):
         if client:
@@ -127,19 +139,21 @@ class ClientApp:
                 self.message_text.insert(tk.END, f"Mensagem enviada para o tópico '{topic_name}': {message}\n")
 
     def open_send_direct_message_dialog(self):
-        recipients = [client.name for client in broker.clients]
-        dialog = SendDirectMessageDialog(self.root, recipients)
+        recipients = [client_name for client_name in broker.clients if client_name != client.name]
+        dialog = SendDirectMessageDialog(self.root, recipients, client)
         result = dialog.result
         if result:
-          recipient, message = result
-          client.send_direct_message(recipient, message)
-          self.message_text.insert(tk.END, f"Mensagem direta para '{recipient}': {message}\n")
+            recipient, message = result
+            client.send_direct_message(recipient, message)
+            self.message_text.insert(tk.END, f"Mensagem direta para '{recipient}': {message}\n")
 
 if __name__ == "__main__":
     root = tk.Tk()
     broker = Broker()
-    client = Client(broker)
-    broker.add_client(client)
+    client_name = simpledialog.askstring("Nome do Cliente", "Digite seu nome:")
+    if client_name:
+        client = Client(client_name, broker)
+        broker.add_client(client)  # Adiciona a instância do cliente ao invés do nome
     socket_client = SocketClient(client)
     ClientApp(root)
     root.mainloop()
