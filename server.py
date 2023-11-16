@@ -1,7 +1,7 @@
 from tkinter import ttk, simpledialog
 from tkinter.simpledialog import askstring
 from tkinter.simpledialog import Dialog
-import socket, pickle, threading, tkinter as tk
+import socket, threading, tkinter as tk
 import tkinter.messagebox as messagebox
 
 class SocketServer:
@@ -46,17 +46,7 @@ class Broker:
             return self.clients[client_name].direct_messages
         else:
             return []
-        
-    def get_direct_messages_for_client(self, client_name):
-        if client_name in self.clients:
-            return self.clients[client_name].direct_messages
-        else:
-            return {}
     
-    def add_topic(self, topic):
-        for client in self.clients.values():
-            client.add_topic(topic)
-
 class Client:
     topics = {"Tópico Inicial": ["Mensagem teste", "Segunda mensagem"]}
 
@@ -390,7 +380,7 @@ class AdminApp:
 
         if recipient:
             # Obter as mensagens diretas do cliente
-            direct_messages = self.broker.get_direct_messages_for_client(recipient)
+            direct_messages = self.broker.get_direct_messages(recipient)
 
             if direct_messages:
                 senders = list(direct_messages.keys())
@@ -423,7 +413,7 @@ class AdminApp:
 
         if recipient:
             # Obter as mensagens diretas do cliente
-            direct_messages = self.broker.get_direct_messages_for_client(recipient)
+            direct_messages = self.broker.get_direct_messages(recipient)
 
             if direct_messages:
                 senders = list(direct_messages.keys())
