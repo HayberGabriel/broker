@@ -1,19 +1,17 @@
 from tkinter import ttk
 from tkinter.simpledialog import askstring
 from server import *
-import socket, time, pickle, threading, tkinter as tk
+import socket, threading, tkinter as tk
 
 class SocketClient:
-    def __init__(self, client):
+    def __init__(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect(('localhost', 12345))
-        client.socket = self.client_socket
 
         threading.Thread(target=self.receive_messages).start()
 
     def receive_messages(self):
         while True:
-            # Adicione a lógica para receber mensagens do servidor aqui
             pass
 
 class ClientApp:
@@ -71,27 +69,45 @@ class ClientApp:
 
             if selected_topic:
                 self.message_text.insert(tk.END, f"Mostrando mensagens do tópico '{selected_topic}':\n")
-                for message in broker.get_topic_messages(selected_topic):
+                for message in Client.topics[selected_topic]:
                     self.message_text.insert(tk.END, f"- {message}\n")
                 self.message_text.insert(tk.END, "\n")
 
     def show_direct_messages(self):
-        if client:
-            self.message_text.insert(tk.END, "Suas mensagens diretas:\n")
+        self.message_text.insert(tk.END, "Suas mensagens diretas:\n")
 
-            for sender, messages in client.direct_messages.items():
-                self.message_text.insert(tk.END, f"Remetente: {sender}\n")
+        for sender, messages in client.direct_messages.items():
+            #if sender != client.name:
+                self.message_text.insert(tk.END, f"{sender}\n")
                 for message in messages:
                     self.message_text.insert(tk.END, f"- {message}\n")
                 self.message_text.insert(tk.END, "\n")
 
-            if not client.direct_messages:
-                self.message_text.insert(tk.END, "Você não tem mensagens diretas.\n")
+    def send_direct_message(self, recipient):
+        def send_message():
+            message = message_entry.get()
+
+            # Adicione esta lógica para enviar a mensagem diretamente para o destinatário
+            client.send_direct_message(recipient, message)
+
+            send_direct_message_dialog.destroy()
+
+        send_direct_message_dialog = tk.Toplevel(self.root)
+        send_direct_message_dialog.title(f"Enviar Mensagem Direta para '{recipient}'")
+
+        tk.Label(send_direct_message_dialog, text=f"Enviar mensagem direta para '{recipient}':").pack()
+
+        message_entry = tk.Entry(send_direct_message_dialog, width=50)
+        message_entry.pack()
+
+        send_button = tk.Button(send_direct_message_dialog, text="Enviar", command=send_message)
+        send_button.pack()
 
     def subscribe_topic(self):
         if client:
-            topics = list(broker.topics.keys())
-
+            # Obtenha a lista atualizada de tópicos
+            topics = list(Client.topics.keys())
+            
             if not topics:
                 self.message_text.insert(tk.END, "Não há tópicos disponíveis para assinar.\n")
                 return
@@ -99,17 +115,19 @@ class ClientApp:
             dialog = ListTopicMessagesDialog(self.root, topics)
             selected_topic = dialog.result  # Obter o tópico selecionado
 
-            if selected_topic in client.subscriptions:
-                self.message_text.insert(tk.END, f"Você já está inscrito nesse tópico.\n")
-               
+            if selected_topic:
+                if selected_topic in client.subscriptions:
+                    self.message_text.insert(tk.END, f"Você já está inscrito nesse tópico.\n")
+                else:
+                    client.subscribe_to_topic(selected_topic)
+                    self.message_text.insert(tk.END, f"Cliente assinou o tópico '{selected_topic}'.\n")
+                    self.message_text.insert(tk.END, f"Agora você está inscrito nesses tópicos: {client.subscriptions}.\n")
             else:
-                client.subscribe_to_topic(selected_topic)
-                self.message_text.insert(tk.END, f"Cliente assinou o tópico '{selected_topic}'.\n")
-                self.message_text.insert(tk.END, f"Agora você está inscrito nesses tópicos'{client.subscriptions}'.\n")
-
+                pass
+    
     def unsubscribe_topic(self):
         if client:
-            topics = list(client.subscriptions)
+            topics = list(client.topics.keys())
 
             if not topics:
                 self.message_text.insert(tk.END, "Você não assinou nenhum tópico.\n")
@@ -124,36 +142,38 @@ class ClientApp:
                 self.message_text.insert(tk.END, f"Agora você está inscrito nesses tópicos'{client.subscriptions}'.\n")
 
     def open_send_topic_dialog(self):
-        topics = list(broker.topics.keys())
+        topics = list(client.topics.keys())
         if not topics:
             self.message_text.insert(tk.END, "Não há tópicos disponíveis para enviar mensagens.\n")
             return
 
-        dialog = SelectTopicDialog(self.root, broker)
+        dialog = SelectTopicDialog(self.root, client)
         if dialog.result:
             topic_name = dialog.result
             message = askstring("Enviar Mensagem para Tópico", "Digite a Mensagem:")
             if message:
-                client.add_in_messages_from_topic(topic_name, message)
-                broker.add_message_to_topic(topic_name, message)
+                client.add_message_in_topic(topic_name, message)
                 self.message_text.insert(tk.END, f"Mensagem enviada para o tópico '{topic_name}': {message}\n")
 
     def open_send_direct_message_dialog(self):
-        recipients = [client_name for client_name in broker.clients if client_name != client.name]
-        dialog = SendDirectMessageDialog(self.root, recipients, client)
-        result = dialog.result
-        if result:
-            recipient, message = result
-            client.send_direct_message(recipient, message)
-            self.message_text.insert(tk.END, f"Mensagem direta para '{recipient}': {message}\n")
+            recipients = [client_name for client_name in broker.clients]
+
+            if not recipients:
+                self.message_text.insert(tk.END, "Você não pode enviar mensagens diretas porque não há destinatários disponíveis.\n")
+                return
+
+            dialog = SelectRecipientDialog(self.root, recipients)
+            selected_recipient = dialog.result
+
+            if selected_recipient:
+                self.send_direct_message(selected_recipient)
 
 if __name__ == "__main__":
     root = tk.Tk()
     broker = Broker()
-    client_name = simpledialog.askstring("Nome do Cliente", "Digite seu nome:")
-    if client_name:
-        client = Client(client_name, broker)
-        broker.add_client(client)  # Adiciona a instância do cliente ao invés do nome
-    socket_client = SocketClient(client)
+    #client_name = simpledialog.askstring("Nome do Cliente", "Digite seu nome:")
+    #if client_name:
+    client = Client("Hayber")
+    broker.add_client(client)  # Adiciona a instância do cliente ao invés do nome
     ClientApp(root)
     root.mainloop()

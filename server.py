@@ -1,12 +1,11 @@
 from tkinter import ttk, simpledialog
 from tkinter.simpledialog import askstring
 from tkinter.simpledialog import Dialog
-import socket, time, pickle, threading, tkinter as tk
+import socket, pickle, threading, tkinter as tk
 import tkinter.messagebox as messagebox
 
 class SocketServer:
-    def __init__(self, broker):
-        self.broker = broker
+    def __init__(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind(('localhost', 12345))
         self.server_socket.listen(5)
@@ -15,7 +14,6 @@ class SocketServer:
 
         print("Aguardando conexões...")
         threading.Thread(target=self.accept_connections).start()
-
 
     def accept_connections(self):
         while True:
@@ -27,22 +25,13 @@ class SocketServer:
 
             threading.Thread(target=self.handle_client, args=(client_socket,)).start()
 
+    def handle_client(self):
+        pass
+
 class Broker:
     def __init__(self):
-        self.topics = {"Tópico Inicial": ["Mensagem teste", "Segunda mensagem"]}
-        self.clients = {"ExemploCliente": Client("ExemploCliente", self)}  # Exemplo de cliente adicionado ao iniciar
-
-    def get_topic_messages(self, topic):
-        return self.topics.get(topic, [])
-
-    def add_topic(self, topic_name):
-        self.topics[topic_name] = []
-
-    def remove_topic(self, topic_name):
-        if topic_name in self.topics:
-            del self.topics[topic_name]
-        return list(self.topics.keys())
-
+        self.clients = {"ExemploCliente": Client("ExemploCliente")}
+        
     def add_client(self, client):
         self.clients[client.name] = client
 
@@ -51,15 +40,6 @@ class Broker:
 
     def get_clients(self):
         return self.clients
-
-    def list_topic_messages(self, topic_name):
-        if topic_name in self.topics:
-            return self.topics[topic_name]
-        else:
-            return []
-        
-    def add_message_to_topic(self, topic_name, message):
-        self.topics[topic_name].append(message)
 
     def get_direct_messages(self, client_name):
         if client_name in self.clients:
@@ -72,30 +52,34 @@ class Broker:
             return self.clients[client_name].direct_messages
         else:
             return {}
-        
-    def subscribe_to_topic(self, client, topic_name):
-        if topic_name in self.topics:
-            self.topics[topic_name].add(client)
+    
+    def add_topic(self, topic):
+        for client in self.clients.values():
+            client.add_topic(topic)
 
 class Client:
-    def __init__(self, name, broker):
+    topics = {"Tópico Inicial": ["Mensagem teste", "Segunda mensagem"]}
+
+    def __init__(self, name):
         self.name = name
-        self.subscriptions = ["topic"]
-        self.messages_from_topic = {"topic": ["message1", "message2"]}
+        self.subscriptions = []
         self.direct_messages = {"from1": ["tchau"], "from2" : ["oi", "oi"]}
-        self.broker = broker
+
+    def add_topic(self, topic_name):
+        Client.topics[topic_name] = []
 
     def subscribe_to_topic(self, topic_name):
-        self.subscriptions.append(topic_name)
+        if topic_name in Client.topics:
+            self.subscriptions.append(topic_name)
 
     def unsubscribe_from_topic(self, topic_name):
         self.subscriptions.remove(topic_name)
 
-    def add_in_messages_from_topic(self, topic_name, message):
-        if topic_name in self.subscriptions:
-            if topic_name not in self.messages_from_topic:
-                self.messages_from_topic[topic_name] = []
-            self.messages_from_topic[topic_name].append(message)
+    def add_message_in_topic(self, topic_name, message):
+        if topic_name in Client.topics:
+            Client.topics[topic_name].append(message)
+        else:
+            Client.topics[topic_name] = [message]
 
     def send_direct_message(self, recipient, message):
         if recipient in self.direct_messages:
@@ -172,15 +156,15 @@ class SendTopicMessageDialog(simpledialog.Dialog):
         self.result = self.topic_name.get()
    
 class SelectTopicDialog(simpledialog.Dialog):
-    def __init__(self, parent, broker):
-        self.broker = broker
+    def __init__(self, parent, client):
+        self.client = client
         super().__init__(parent, title="Selecionar Tópico")
 
     def body(self, master):
         tk.Label(master, text="Selecione o tópico para enviar mensagem:").pack()
 
         self.topic_name = tk.StringVar()
-        initial_topics = list(self.broker.topics.keys())
+        initial_topics = list(self.client.topics.keys())
         self.topic_name.set(initial_topics[0])
 
         self.topic_selection = ttk.Combobox(master, textvariable=self.topic_name, values=initial_topics)
@@ -261,7 +245,7 @@ class SendDirectMessageDialog(Dialog):
         recipient = self.recipient_listbox.get(tk.ACTIVE)
         message = self.message_entry.get()
         if recipient and message:
-            self.client.send_direct_message(recipient, message)
+            self.client.send_direct_message(self.client.name, message)
             self.result = (recipient, message)
             self.cancel()
 
@@ -351,11 +335,11 @@ class AdminApp:
     def add_topic(self):
         topic_name = askstring("Adicionar Tópico", "Nome do Tópico:")
         if topic_name:
-            self.broker.add_topic(topic_name)
+            Client.topics[topic_name] = []
             self.message_text.insert(tk.END, f"Tópico '{topic_name}' adicionado.\n")
 
     def remove_topic(self):
-        topics = list(self.broker.topics.keys())
+        topics = list(Client.topics.keys())
         if not topics:
             self.message_text.insert(tk.END, "Não há tópicos para remover.\n")
             return
@@ -363,11 +347,11 @@ class AdminApp:
         dialog = RemoveTopicDialog(self.root, topics)
         if dialog.result:
             topic_name = dialog.result
-            self.broker.remove_topic(topic_name)
+            del Client.topics[topic_name]
             self.message_text.insert(tk.END, f"Tópico '{topic_name}' removido.\n")
 
     def list_topic_messages(self):
-        topics = list(self.broker.topics.keys())
+        topics = list(Client.topics.keys())
 
         if not topics:
             self.message_text.insert(tk.END, "Não há tópicos para listar mensagens.\n")
@@ -376,7 +360,7 @@ class AdminApp:
         dialog = ListTopicMessagesDialog(self.root, topics)
         if dialog.result:
             topic_name = dialog.result
-            messages = self.broker.list_topic_messages(topic_name)
+            messages = Client.topics.get(topic_name, [])
 
             if not messages:
                 self.message_text.insert(tk.END, f"Não há mensagens no tópico '{topic_name}'.\n")
@@ -415,7 +399,7 @@ class AdminApp:
                 show_messages_dialog = tk.Toplevel(self.root)
                 show_messages_dialog.title(f"Mensagens Diretas de {recipient}")
 
-                tk.Label(show_messages_dialog, text=f"Mensagens diretas para {recipient}:").pack(pady=10)
+                tk.Label(show_messages_dialog, text=f"Mensagens diretas do {recipient}:").pack(pady=10)
 
                 for sender, messages in direct_messages.items():
                     tk.Label(show_messages_dialog, text=f"Remetente: {sender}").pack()
@@ -498,9 +482,8 @@ class AdminApp:
             message_listbox.insert(tk.END, message)
         
 if __name__ == "__main__":
-    broker = Broker()
-    server = SocketServer(broker)
-
     root = tk.Tk()
-    AdminApp(root, broker)  # Passamos a instância do broker para a aplicação
+    broker = Broker()
+    AdminApp(root, broker)
+    SocketServer()
     root.mainloop()
