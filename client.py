@@ -1,23 +1,24 @@
 from tkinter import ttk
 from tkinter.simpledialog import askstring
-from server import *
-import socket, threading, tkinter as tk
-
-class SocketClient:
-    def __init__(self):
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client_socket.connect(('localhost', 12345))
-
-        threading.Thread(target=self.receive_messages).start()
-
-    def receive_messages(self):
-        while True:
-            pass
+from admin import *
+import tkinter as tk
 
 class ClientApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"Bem vindo {client.name}!")
+
+        self.shared_variable = tk.IntVar()
+        self.shared_variable.set(6)
+
+        self.label = tk.Label(root, textvariable=self.shared_variable, font=('Helvetica', 24))
+        self.label.pack(pady=20)
+
+        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket.connect(('localhost', 12345))
+
+        increment_button = tk.Button(root, text="Incrementar", command=self.increment_value)
+        increment_button.pack()
 
         # Frame principal
         self.main_frame = ttk.Frame(root)
@@ -31,6 +32,9 @@ class ClientApp:
         self.message_text.pack(side="left", fill="both", expand=True)
 
         self.scrollbar.config(command=self.message_text.yview)
+
+        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket.connect(('localhost', 12345))
 
         # Rolar para a última linha automaticamente
         self.message_text.see("end")
@@ -55,6 +59,10 @@ class ClientApp:
         self.show_direct_messages_button = tk.Button(self.main_frame, text="Mostrar Mensagens Diretas", command=self.show_direct_messages, padx=20)
         self.show_direct_messages_button.pack()
 
+    def increment_value(self):
+        new_value = self.shared_variable.get() + 1
+        self.shared_variable.set(new_value)
+        self.client_socket.send(str(new_value).encode())
 
     def show_topic_messages(self):
         if client:
@@ -69,7 +77,7 @@ class ClientApp:
 
             if selected_topic:
                 self.message_text.insert(tk.END, f"Mostrando mensagens do tópico '{selected_topic}':\n")
-                for message in Client.topics[selected_topic]:
+                for message in client.topics[selected_topic]:
                     self.message_text.insert(tk.END, f"- {message}\n")
                 self.message_text.insert(tk.END, "\n")
 
@@ -106,7 +114,7 @@ class ClientApp:
     def subscribe_topic(self):
         if client:
             # Obtenha a lista atualizada de tópicos
-            topics = list(Client.topics.keys())
+            topics = list(client.topics.keys())
             
             if not topics:
                 self.message_text.insert(tk.END, "Não há tópicos disponíveis para assinar.\n")
@@ -175,5 +183,5 @@ if __name__ == "__main__":
     #if client_name:
     client = Client("Hayber")
     broker.add_client(client)  # Adiciona a instância do cliente ao invés do nome
-    ClientApp(root)
+    client_app = ClientApp(root)
     root.mainloop()
