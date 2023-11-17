@@ -15,10 +15,10 @@ class ClientApp:
         self.shared_variable = tk.IntVar()
         self.shared_variable.set(6)
         self.label = tk.Label(root, textvariable=self.shared_variable, font=('Helvetica', 24))
-        self.label.pack(pady=20)
+        #self.label.pack(pady=20)
 
         increment_button = tk.Button(root, text="Incrementar", command=self.increment_value)
-        increment_button.pack()
+        #increment_button.pack()
 
         # Frame principal
         self.main_frame = ttk.Frame(root)

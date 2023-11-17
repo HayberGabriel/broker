@@ -280,7 +280,7 @@ class AdminApp:
         self.shared_variable = tk.IntVar()
         self.shared_variable.set(6)
         self.label = tk.Label(root, textvariable=self.shared_variable, font=('Helvetica', 24))
-        self.label.pack(pady=20)
+        #self.label.pack(pady=20)
 
         self.topic_name = tk.StringVar()
         self.topic_name.set("topic1")
