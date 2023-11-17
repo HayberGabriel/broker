@@ -272,17 +272,15 @@ class AdminApp:
         self.root.title("Interface do Admin")
         self.broker = broker
 
+        self.admin_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.admin_socket.connect(('localhost', 12345))
+
+        threading.Thread(target=self.receive_updates).start()
+
         self.shared_variable = tk.IntVar()
         self.shared_variable.set(6)
-
         self.label = tk.Label(root, textvariable=self.shared_variable, font=('Helvetica', 24))
         self.label.pack(pady=20)
-
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.connect(('localhost', 12345))
-
-        # Inicia a thread para receber atualizações do servidor
-        threading.Thread(target=self.receive_updates).start()
 
         self.topic_name = tk.StringVar()
         self.topic_name.set("topic1")
@@ -335,7 +333,7 @@ class AdminApp:
 
     def receive_updates(self):
         while True:
-            data = self.server_socket.recv(1024)
+            data = self.admin_socket.recv(1024)
             if not data:
                 break
             value = int(data.decode())

@@ -24,13 +24,15 @@ class Server:
                 data = client_socket.recv(1024)
                 if not data:
                     break
-                print("Recebido:", data.decode())
+
                 # Propaga a atualização para todos os clientes
                 self.broadcast(data)
+
             except ConnectionResetError:
                 print("Conexão encerrada.")
                 self.clients.remove(client_socket)
                 break
+
 
     def broadcast(self, data):
         for client_socket in self.clients:

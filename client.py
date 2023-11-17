@@ -8,14 +8,14 @@ class ClientApp:
         self.root = root
         self.root.title(f"Bem vindo {client.name}!")
 
-        self.shared_variable = tk.IntVar()
-        self.shared_variable.set(6)
-
-        self.label = tk.Label(root, textvariable=self.shared_variable, font=('Helvetica', 24))
-        self.label.pack(pady=20)
-
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect(('localhost', 12345))
+        threading.Thread(target=self.receive_updates).start()
+
+        self.shared_variable = tk.IntVar()
+        self.shared_variable.set(6)
+        self.label = tk.Label(root, textvariable=self.shared_variable, font=('Helvetica', 24))
+        self.label.pack(pady=20)
 
         increment_button = tk.Button(root, text="Incrementar", command=self.increment_value)
         increment_button.pack()
@@ -61,8 +61,15 @@ class ClientApp:
 
     def increment_value(self):
         new_value = self.shared_variable.get() + 1
-        self.shared_variable.set(new_value)
         self.client_socket.send(str(new_value).encode())
+
+    def receive_updates(self):
+        while True:
+            data = self.client_socket.recv(1024)
+            if not data:
+                break
+            value = int(data.decode())
+            self.shared_variable.set(value)    
 
     def show_topic_messages(self):
         if client:
@@ -179,9 +186,9 @@ class ClientApp:
 if __name__ == "__main__":
     root = tk.Tk()
     broker = Broker()
-    #client_name = simpledialog.askstring("Nome do Cliente", "Digite seu nome:")
-    #if client_name:
-    client = Client("Hayber")
+    client_name = simpledialog.askstring("Nome do Cliente", "Digite seu nome:")
+    if client_name:
+        client = Client(client_name)
     broker.add_client(client)  # Adiciona a instância do cliente ao invés do nome
     client_app = ClientApp(root)
     root.mainloop()
