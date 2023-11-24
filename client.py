@@ -26,20 +26,20 @@ class ClientApp:
         self.scrollbar.config(command=self.message_text.yview)
         self.message_text.see("end")
 
-        self.send_topic_message_button = tk.Button(self.main_frame, text="Enviar Mensagem para Tópico", command=self.open_send_topic_dialog, padx=20)
-        self.send_topic_message_button.pack()
-
-        self.send_topic_message_button = tk.Button(self.main_frame, text="Enviar Mensagem Direta", command=self.open_send_direct_message_dialog, padx=20)
-        self.send_topic_message_button.pack()
-
         self.subscribe_topic_button = tk.Button(self.main_frame, text="Assinar Tópico", command=self.subscribe_topic, padx=20)
         self.subscribe_topic_button.pack()
 
         self.unsubscribe_topic_button = tk.Button(self.main_frame, text="Cancelar Assinatura", command=self.unsubscribe_topic, padx=20)
         self.unsubscribe_topic_button.pack()
 
+        self.send_topic_message_button = tk.Button(self.main_frame, text="Enviar Mensagem para Tópico", command=self.open_send_topic_dialog, padx=20)
+        self.send_topic_message_button.pack()
+
         self.show_topic_messages_button = tk.Button(self.main_frame, text="Mostrar Mensagens dos Tópicos", command=self.show_topic_messages, padx=20)
         self.show_topic_messages_button.pack()
+
+        self.send_topic_message_button = tk.Button(self.main_frame, text="Enviar Mensagem Direta", command=self.open_send_direct_message_dialog, padx=20)
+        self.send_topic_message_button.pack()
 
         self.show_direct_messages_button = tk.Button(self.main_frame, text="Mostrar Mensagens Diretas", command=self.show_direct_messages, padx=20)
         self.show_direct_messages_button.pack()
