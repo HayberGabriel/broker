@@ -268,6 +268,40 @@ class RemoveTopicDialog(simpledialog.Dialog):
     def apply(self):
         self.result = self.topic_name.get()
 
+class SelectTopicDialog(simpledialog.Dialog):
+    def __init__(self, parent, client):
+        self.client = client
+        super().__init__(parent, title="Selecionar Tópico")
+
+    def body(self, master):
+        tk.Label(master, text="Selecione o tópico para enviar mensagem:").pack()
+
+        self.topic_name = tk.StringVar()
+        self.topic_name.set(Server.broker.get_topics()[0])
+
+        self.topic_selection = ttk.Combobox(master, textvariable=self.topic_name, values=Server.broker.get_topics())
+        self.topic_selection.pack()
+
+    def apply(self):
+        self.result = self.topic_name.get()
+
+class ListTopicMessagesDialog(simpledialog.Dialog):
+    def __init__(self, parent, topics):
+        self.topics = topics
+        super().__init__(parent, title="Listar Mensagens do Tópico")
+
+    def body(self, master):
+        tk.Label(master, text="Selecione o tópico para listar mensagens:").pack()
+
+        self.topic_name = tk.StringVar()
+        self.topic_name.set(self.topics[0])
+
+        self.topic_selection = ttk.Combobox(master, textvariable=self.topic_name, values=self.topics)
+        self.topic_selection.pack()
+
+    def apply(self):
+        self.result = self.topic_name.get()
+
 class SelectRecipientDialog(simpledialog.Dialog):
     def __init__(self, parent, clients):
         self.clients = clients
