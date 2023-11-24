@@ -8,6 +8,8 @@ class ClientApp:
         self.root = root
         self.root.title(f"Bem vindo {client.name}!")
 
+        self.topics = broker.get_topics()
+
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect(('localhost', 12345))
         threading.Thread(target=self.receive_updates).start()
@@ -47,17 +49,20 @@ class ClientApp:
             data = self.client_socket.recv(1024)
             if not data:
                 break
-            value = data.decode()
+            print(self.topics)
+            self.topics = pickle.loads(data)
+            print(self.topics)
+            self.root.title(self.topics)
 
     def show_topic_messages(self):
         if client:
-            topics = broker.get_topics()
+            subs = client.subscriptions
 
-            if not topics:
+            if not subs:
                 self.message_text.insert(tk.END, "Você não assinou nenhum tópico.\n")
                 return
 
-            dialog = ListTopicMessagesDialog(self.root, topics)
+            dialog = ListTopicMessagesDialog(self.root, subs)
             selected_topic = dialog.result
 
             if selected_topic:
@@ -97,7 +102,7 @@ class ClientApp:
 
     def subscribe_topic(self):
         if client:
-            topics = broker.get_topics()
+            topics = self.topics
 
             if not topics:
                 self.message_text.insert(tk.END, "Não há tópicos disponíveis para assinar.\n")
@@ -116,7 +121,7 @@ class ClientApp:
 
     def unsubscribe_topic(self):
         if client:
-            topics = broker.get_topics()
+            topics = self.topics
 
             if not topics:
                 self.message_text.insert(tk.END, "Você não assinou nenhum tópico.\n")
@@ -134,12 +139,12 @@ class ClientApp:
                     self.message_text.insert(tk.END, f"Você não estava escrito nesse tópico.\n")
 
     def open_send_topic_dialog(self):
-        topics = broker.get_topics()
+        topics = self.topics
         if not topics:
             self.message_text.insert(tk.END, "Não há tópicos disponíveis para enviar mensagens.\n")
             return
 
-        dialog = SelectTopicDialog(self.root, client)
+        dialog = SelectTopicDialog(self.root, topics)
         if dialog.result:
             topic_name = dialog.result
             message = askstring("Enviar Mensagem para Tópico", "Digite a Mensagem:")

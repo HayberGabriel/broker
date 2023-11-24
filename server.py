@@ -5,6 +5,7 @@ import socket, threading, tkinter as tk
 import tkinter.messagebox as messagebox
 import socket
 import threading
+import pickle
 
 class Client:
     def __init__(self, name):
@@ -94,9 +95,10 @@ class Server:
                 break
 
     def broadcast(self, data):
+        serialized_data = pickle.dumps(data)
         for client_socket in self.clients:
             try:
-                client_socket.send(data)
+                client_socket.send(serialized_data)
             except Exception as e:
                 print("Erro ao enviar mensagem:", e)
 
@@ -107,7 +109,6 @@ class AdminApp:
 
         self.admin_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.admin_socket.connect(('localhost', 12345))
-        threading.Thread(target=self.receive_updates).start()
 
         self.main_frame = ttk.Frame(root)
         self.main_frame.pack(fill="both", expand=True)
@@ -152,21 +153,15 @@ class AdminApp:
                                                     command=self.list_topic_messages, padx=20)
         self.list_topic_messages_button.pack()
 
-    def receive_updates(self):
-        while True:
-            data = self.admin_socket.recv(1024)
-            if not data:
-                break
-            value = int(data.decode())
-
     def add_topic(self):
         topic_name = askstring("Adicionar Tópico", "Nome do Tópico:")
         if topic_name:
-            Server.broker.add_topic(topic_name)
+            server.broker.add_topic(topic_name)
+            server.broadcast(server.broker.get_topics())
             self.message_text.insert(tk.END, f"Tópico '{topic_name}' adicionado.\n")
 
     def remove_topic(self):
-        topics = Server.broker.get_topics()
+        topics = server.broker.get_topics()
         if not topics:
             self.message_text.insert(tk.END, "Não há tópicos para remover.\n")
             return
@@ -174,11 +169,12 @@ class AdminApp:
         dialog = RemoveTopicDialog(self.root, topics)
         if dialog.result:
             topic_name = dialog.result
-            Server.broker.remove_topic(topic_name)
+            server.broker.remove_topic(topic_name)
+            server.broadcast(server.broker.get_topics())
             self.message_text.insert(tk.END, f"Tópico '{topic_name}' removido.\n")
 
     def list_topic_messages(self):
-        topics = Server.broker.get_topics()
+        topics = server.broker.get_topics()
 
         if not topics:
             self.message_text.insert(tk.END, "Não há tópicos para listar mensagens.\n")
@@ -187,7 +183,7 @@ class AdminApp:
         dialog = ListTopicMessagesDialog(self.root, topics)
         if dialog.result:
             topic_name = dialog.result
-            messages = Server.broker.get_messages_from_topic(topic_name)
+            messages = server.broker.get_messages_from_topic(topic_name)
 
             if not messages:
                 self.message_text.insert(tk.END, f"Não há mensagens no tópico '{topic_name}'.\n")
@@ -199,12 +195,12 @@ class AdminApp:
     def show_messages_count(self):
         client_name = askstring("Selecionar Cliente", "Digite o nome do cliente:")
         if client_name:
-            messages = Server.broker.get_direct_messages(client_name)
+            messages = server.broker.get_direct_messages(client_name)
             message_count = len(messages)
             messagebox.showinfo("Quantidade de Mensagens", f"O cliente {client_name} tem {message_count} mensagens diretas.")
 
     def show_direct_messages(self):
-        clients = list(Server.broker.clients.keys())
+        clients = list(server.broker.clients.keys())
 
         if not clients:
             self.message_text.insert(tk.END, "Não há clientes para exibir mensagens diretas.\n")
@@ -214,7 +210,7 @@ class AdminApp:
         recipient = dialog.result
 
         if recipient:
-            direct_messages = Server.broker.get_direct_messages(recipient)
+            direct_messages = server.broker.get_direct_messages(recipient)
 
             if direct_messages:
                 senders = list(direct_messages.keys())
@@ -234,7 +230,7 @@ class AdminApp:
                 self.message_text.insert(tk.END, f"Não há mensagens diretas para '{recipient}'.\n") 
     
     def remove_direct_message(self):
-        clients = list(Server.broker.clients.keys())
+        clients = list(server.broker.clients.keys())
 
         if not clients:
             self.message_text.insert(tk.END, "Não há clientes para remover mensagens diretas.\n")
@@ -244,7 +240,7 @@ class AdminApp:
         recipient = dialog.result
 
         if recipient:
-            direct_messages = Server.broker.get_direct_messages(recipient)
+            direct_messages = server.broker.get_direct_messages(recipient)
 
             if direct_messages:
                 senders = list(direct_messages.keys())
@@ -370,17 +366,17 @@ class SendTopicMessageDialog(simpledialog.Dialog):
         self.result = self.topic_name.get()
    
 class SelectTopicDialog(simpledialog.Dialog):
-    def __init__(self, parent, client):
-        self.client = client
+    def __init__(self, parent, topics):
+        self.topics = topics
         super().__init__(parent, title="Selecionar Tópico")
 
     def body(self, master):
         tk.Label(master, text="Selecione o tópico para enviar mensagem:").pack()
 
         self.topic_name = tk.StringVar()
-        self.topic_name.set(Server.broker.get_topics()[0])
+        self.topic_name.set(self.topics[0])
 
-        self.topic_selection = ttk.Combobox(master, textvariable=self.topic_name, values=Server.broker.get_topics())
+        self.topic_selection = ttk.Combobox(master, textvariable=self.topic_name, values=self.topics)
         self.topic_selection.pack()
 
     def apply(self):
@@ -486,6 +482,6 @@ class ShowMessagesCountDialog(simpledialog.Dialog):
 
 if __name__ == "__main__":
     root = tk.Tk()
-    Server()
+    server = Server()
     AdminApp(root)
     root.mainloop()
