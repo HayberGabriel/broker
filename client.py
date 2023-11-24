@@ -52,7 +52,6 @@ class ClientApp:
             print(self.topics)
             self.topics = pickle.loads(data)
             print(self.topics)
-            self.root.title(self.topics)
 
     def show_topic_messages(self):
         if client:
@@ -67,7 +66,7 @@ class ClientApp:
 
             if selected_topic:
                 self.message_text.insert(tk.END, f"Mostrando mensagens do tópico '{selected_topic}':\n")
-                for message in broker.topics[selected_topic]:
+                for message in broker.get_messages_from_topic(selected_topic):
                     self.message_text.insert(tk.END, f"- {message}\n")
                 self.message_text.insert(tk.END, "\n")
 
@@ -168,9 +167,9 @@ class ClientApp:
 if __name__ == "__main__":
     root = tk.Tk()
     broker = Server.broker
-    #client_name = simpledialog.askstring("Nome do Cliente", "Digite seu nome:")
-    #if client_name:
-    client = Client("Hayber")
+    client_name = simpledialog.askstring("Nome do Cliente", "Digite seu nome:")
+    if client_name:
+        client = Client(client_name)
     broker.add_client(client)
     ClientApp(root)
     root.mainloop()
