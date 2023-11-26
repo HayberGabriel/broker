@@ -9,6 +9,7 @@ class ClientApp:
         self.root.title(f"Bem vindo {client.name}!")
 
         self.topics = broker.get_topics()
+        self.clients = broker.get_clients()
 
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect(('localhost', 12345))
@@ -156,7 +157,7 @@ class ClientApp:
                 self.message_text.insert(tk.END, f"Mensagem enviada para o tópico '{topic_name}': {message}\n")
 
     def open_send_direct_message_dialog(self):
-        recipients = self.clients
+        recipients = [client_name for client_name in broker.clients]
 
         if not recipients:
             self.message_text.insert(tk.END, "Você não pode enviar mensagens diretas porque não há destinatários disponíveis.\n")

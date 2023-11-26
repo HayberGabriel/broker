@@ -77,7 +77,8 @@ class Server:
             client_socket, _ = self.server_socket.accept()
             self.clients.append(client_socket)
             threading.Thread(target=self.handle_client, args=(client_socket,)).start()
-
+            self.broadcast_clients_update(server.broker.get_clients())
+            
     def handle_client(self, client_socket):
         while True:
             try:
