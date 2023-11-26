@@ -92,7 +92,21 @@ class Server:
                 self.clients.remove(client_socket)
                 break
 
-    def broadcast(self, data):
+    def broadcast_clients_update(self, clients):
+        data = {
+            "type": "clients_update",
+            "clients": clients
+        }
+        self.broadcast_data(data)
+
+    def broadcast_topics_update(self, topics):
+        data = {
+            "type": "topics_update",
+            "topics": topics
+        }
+        self.broadcast_data(data)
+
+    def broadcast_data(self, data):
         serialized_data = pickle.dumps(data)
         for client_socket in self.clients:
             try:
@@ -103,7 +117,7 @@ class Server:
 class AdminApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Servidor")
+        self.root.title("Admin")
 
         self.admin_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.admin_socket.connect(('localhost', 12345))
@@ -154,7 +168,7 @@ class AdminApp:
         topic_name = askstring("Adicionar Tópico", "Nome do Tópico:")
         if topic_name:
             server.broker.add_topic(topic_name)
-            server.broadcast(server.broker.get_topics())
+            server.broadcast_topics_update(server.broker.get_topics())
             self.message_text.insert(tk.END, f"Tópico '{topic_name}' adicionado.\n")
 
     def remove_topic(self):
@@ -167,7 +181,7 @@ class AdminApp:
         if dialog.result:
             topic_name = dialog.result
             server.broker.remove_topic(topic_name)
-            server.broadcast(server.broker.get_topics())
+            server.broadcast_topics_update(server.broker.get_topics())
             self.message_text.insert(tk.END, f"Tópico '{topic_name}' removido.\n")
 
     def show_messages_count(self):
@@ -186,18 +200,14 @@ class AdminApp:
                 if direct_messages:
                     senders = list(direct_messages.keys())
 
-                    # Criar uma lista de remetentes com a quantidade de mensagens
                     sender_options = [f"{sender}" for sender in senders]
 
-                    # Escolher o remetente
                     dialog_sender = SelectRecipientDialog(self.root, sender_options)
                     selected_sender_option = dialog_sender.result
 
-                    # Extrair o nome do remetente da opção selecionada
                     selected_sender = selected_sender_option.split(' (')[0] if selected_sender_option else None
 
                     if selected_sender:
-                        # Obter a quantidade de mensagens para o remetente selecionado
                         message_count = len(direct_messages[selected_sender])
                         messagebox.showinfo("Quantidade de Mensagens", f"O cliente {client_name} tem {message_count} mensagens diretas do remetente {selected_sender}.")
                     else:
@@ -221,18 +231,14 @@ class AdminApp:
             if direct_messages:
                 senders = list(direct_messages.keys())
 
-                # Criar uma lista de remetentes com a quantidade de mensagens
                 sender_options = [f"{sender}" for sender in senders]
 
-                # Escolher o remetente
                 dialog_sender = SelectRecipientDialog(self.root, sender_options)
                 selected_sender_option = dialog_sender.result
 
-                # Extrair o nome do remetente da opção selecionada
                 selected_sender = selected_sender_option.split(' (')[0] if selected_sender_option else None
 
                 if selected_sender:
-                    # Remover todas as mensagens diretas do remetente selecionado
                     if selected_sender in server.broker.clients[recipient].direct_messages:
                         del server.broker.clients[recipient].direct_messages[selected_sender]
 

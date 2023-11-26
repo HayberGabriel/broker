@@ -49,9 +49,13 @@ class ClientApp:
             data = self.client_socket.recv(1024)
             if not data:
                 break
-            print(self.topics)
-            self.topics = pickle.loads(data)
-            print(self.topics)
+            decoded_data = pickle.loads(data)
+            update_type = decoded_data.get("type", "")
+
+            if update_type == "clients_update":
+                self.clients = decoded_data.get("clients", [])
+            elif update_type == "topics_update":
+                self.topics = decoded_data.get("topics", [])
 
     def show_topic_messages(self):
         if client:
@@ -152,7 +156,7 @@ class ClientApp:
                 self.message_text.insert(tk.END, f"Mensagem enviada para o tópico '{topic_name}': {message}\n")
 
     def open_send_direct_message_dialog(self):
-        recipients = [client_name for client_name in broker.clients]
+        recipients = self.clients
 
         if not recipients:
             self.message_text.insert(tk.END, "Você não pode enviar mensagens diretas porque não há destinatários disponíveis.\n")
